@@ -152,10 +152,23 @@ bot.on('callback_query', async (query) => {
     const joined = await checkUserJoined(userId);
 
     if (!joined) {
-      // L'utilisateur n'a pas encore rejoint
-      await bot.answerCallbackQuery(query.id, {
-        text: '❌ Vous n\'avez pas encore rejoint tous les canaux !',
-        show_alert: true
+      // Répondre au bouton sans alerte
+      await bot.answerCallbackQuery(query.id, { text: '' });
+
+      // Envoyer un vrai message
+      await bot.sendMessage(chatId, `
+❌ *Accès refusé !*
+
+⚠️ Vous n'avez pas encore rejoint tous les canaux obligatoires !
+
+👇 *Rejoignez d'abord ces canaux:*
+1. 📢 [Canal Officiel](https://t.me/+dxH_OGPd269mMjM0)
+2. 👥 [Groupe Officiel](https://t.me/+Le-FgJipb-UyMDY0)
+
+✅ Après avoir rejoint, appuyez sur le bouton *"J'ai rejoint tous les canaux !"*
+      `, {
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true
       });
       return;
     }
