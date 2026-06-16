@@ -1,0 +1,19 @@
+{
+  "name": "dev-shadow-md-bot",
+  "version": "1.0.0",
+  "description": "Dev Shadow MD Bot - WhatsApp + Telegram",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0",
+    "node-telegram-bot-api": "^0.64.0",
+    "pino": "^8.0.0",
+    "dotenv": "^16.0.0",
+    "axios": "^1.6.0",
+    "moment": "^2.29.4",
+    "fs-extra": "^11.2.0",
+    "qrcode": "^1.5.3"
+  }
+}
