@@ -21,26 +21,38 @@ const bot = new TelegramBot(TOKEN, { polling: true });
 // ============================================
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  bot.sendMessage(chatId, `
-╔═══════════════════════════╗
+
+  bot.sendVideo(
+    chatId,
+    'https://files.catbox.moe/vw6pys.mp4', // Remplace par ton lien video
+    {
+      caption: `╔═══════════════════════════╗
 ║   🤖 ${BOT_NAME}
 ╚═══════════════════════════╝
 
-𝙷𝙴𝚈 𝙱𝙸𝙴𝙽𝚅𝙴𝙽𝚄𝙴 𝙳𝙰𝙽𝚂 𝙻𝙴 𝙱𝙾𝚃 𝙳𝙴𝚅 𝚂𝙷𝙰𝙳𝙾𝚆 👋
+👋 𝙷𝙴𝚈 𝙱𝙸𝙴𝙽𝚅𝙴𝙽𝚄𝙴 𝙳𝙰𝙽𝚂 𝙻𝙴 𝙱𝙾𝚃 𝙳𝙴𝚅 𝚂𝙷𝙰𝙳𝙾𝚆
 
-📱 *𝙻𝙴𝚂 𝙲𝙾𝙼𝙼𝙰𝙽𝙳𝙴𝚂...:*
+📱 *𝙻𝙴𝚂 𝙲𝙾𝙼𝙼𝙰𝙽𝙳𝙴𝚂 :*
 
-/connecter +221XXXXXXXX
-→ 𝙶𝙴𝙽𝙴𝚁𝙴 𝙳𝙴 𝙲𝙾𝙳𝙴 𝙲𝙾𝙽𝙽𝙴𝚇𝙸𝙾𝙽..
+🔗 /connecter +221XXXXXXXX
+→ 𝙶𝙴𝙽𝙴𝚁𝙴 𝚄𝙽 𝙲𝙾𝙳𝙴 𝙳𝙴 𝙲𝙾𝙽𝙽𝙴𝚇𝙸𝙾𝙽
 
-/deconnecter
-→ 𝙳𝙴𝙲𝙾𝙽𝙴𝙲𝚃𝙴𝚁 𝙻𝙴 𝙱𝙾𝚃
+❌ /deconnecter
+→ 𝙳𝙴𝙲𝙾𝙽𝙽𝙴𝙲𝚃𝙴 𝙻𝙴 𝙱𝙾𝚃
 
-/status
-→ 𝚅𝙾𝙸𝚁 𝙻'𝙴𝚃𝙰𝚃 𝙳𝙴 𝚅𝙾𝚃𝚁𝙴 𝙲𝙾𝙽𝙽𝙴𝚇𝙸𝙾𝙽..
+📊 /status
+→ 𝚅𝙾𝙸𝚁 𝙻'𝙴𝚃𝙰𝚃 𝙳𝙴 𝚅𝙾𝚃𝚁𝙴 𝙲𝙾𝙽𝙽𝙴𝚇𝙸𝙾𝙽
 
-✅ 𝙰𝙿𝚁𝙴𝚂 𝙲𝙾𝙽𝙽𝙴𝙲𝚃𝙴𝚁 𝚃𝙰𝙿𝙴 *.menu* 𝚂𝚄𝚁 𝚆𝙷𝙰𝚃𝚂𝙰𝙿𝙿 !
-`, { parse_mode: 'Markdown' });
+━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 𝙰𝙿𝚁𝙴̀𝚂 𝙲𝙾𝙽𝙽𝙴𝙲𝚃𝙸𝙾𝙽,
+📖 𝚃𝙰𝙿𝙴 *.menu* 𝚂𝚄𝚁 𝚆𝙷𝙰𝚃𝚂𝙰𝙿𝙿
+
+━━━━━━━━━━━━━━━━━━━━━━
+🐉 Powered By DEV SHADOW TECH`,
+      parse_mode: 'Markdown'
+    }
+  );
 });
 
 // ============================================
