@@ -17,42 +17,128 @@ if (!TOKEN) {
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 // ============================================
-// /start
+// FORCE SUBSCRIBE - CANAUX ET GROUPES
 // ============================================
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
+const REQUIRED_CHANNELS = [
+  {
+    name: '📢 Canal Officiel',
+    link: 'https://t.me/+dxH_OGPd269mMjM0',
+    id: null // Canal privé = pas de vérification automatique
+  },
+  {
+    name: '👥 Groupe Officiel',
+    link: 'https://t.me/+Le-FgJipb-UyMDY0',
+    id: null // Groupe privé = pas de vérification automatique
+  }
+];
 
-  bot.sendVideo(
+// Stocker les utilisateurs qui ont confirmé
+const confirmedUsers = new Set();
+
+// Envoyer le message Force Subscribe
+async function sendForceSubscribe(chatId) {
+  const channelList = REQUIRED_CHANNELS.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+
+  await bot.sendMessage(chatId, `
+╔━━━━━━━━━━━━━━━━━━━━━━╗
+║  🤖 *𝑫𝑬𝑽 𝑺𝑯𝑨𝑫𝑶𝑾 𝑴𝑫 𝑩𝑶𝑻*  ║
+╚━━━━━━━━━━━━━━━━━━━━━━╝
+
+⚠️ *Pour utiliser ce bot, vous devez rejoindre:*
+
+${channelList}
+
+👇 *Cliquez sur les boutons ci-dessous pour rejoindre !*
+  `, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [
+        ...REQUIRED_CHANNELS.map(c => ([{
+          text: c.name,
+          url: c.link
+        }])),
+        [{
+          text: '✅ J\'ai rejoint tous les canaux !',
+          callback_data: 'check_joined'
+        }]
+      ]
+    }
+  });
+}
+
+// Afficher le menu principal Telegram
+async function sendMainMenu(chatId) {
+  await bot.sendMessage(chatId, `
+bot.sendVideo(
     chatId,
     'https://files.catbox.moe/vw6pys.mp4', // Remplace par ton lien video
     {
-      caption: `╔═══════════════════════════╗
-║   🤖 ${BOT_NAME}
-╚═══════════════════════════╝
+      caption:
+╔━━━━━━━━━━━━━━━━━━━━━━╗
+║  🤖 *𝑫𝑬𝑽 𝑺𝑯𝑨𝑫𝑶𝑾 𝑴𝑫 𝑩𝑶𝑻*  ║
+╚━━━━━━━━━━━━━━━━━━━━━━╝
 
-👋 𝙷𝙴𝚈 𝙱𝙸𝙴𝙽𝚅𝙴𝙽𝚄𝙴 𝙳𝙰𝙽𝚂 𝙻𝙴 𝙱𝙾𝚃 𝙳𝙴𝚅 𝚂𝙷𝙰𝙳𝙾𝚆
+✅ *Bienvenue !* 👋
 
-📱 *𝙻𝙴𝚂 𝙲𝙾𝙼𝙼𝙰𝙽𝙳𝙴𝚂 :*
+📱 *Commandes disponibles:*
 
-🔗 /connecter +221XXXXXXXX
-→ 𝙶𝙴𝙽𝙴𝚁𝙴 𝚄𝙽 𝙲𝙾𝙳𝙴 𝙳𝙴 𝙲𝙾𝙽𝙽𝙴𝚇𝙸𝙾𝙽
+/connecter +221XXXXXXXX
+→ Connecter votre WhatsApp
 
-❌ /deconnecter
-→ 𝙳𝙴𝙲𝙾𝙽𝙽𝙴𝙲𝚃𝙴 𝙻𝙴 𝙱𝙾𝚃
+/deconnecter
+→ Déconnecter votre WhatsApp
 
-📊 /status
-→ 𝚅𝙾𝙸𝚁 𝙻'𝙴𝚃𝙰𝚃 𝙳𝙴 𝚅𝙾𝚃𝚁𝙴 𝙲𝙾𝙽𝙽𝙴𝚇𝙸𝙾𝙽
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-✅ 𝙰𝙿𝚁𝙴̀𝚂 𝙲𝙾𝙽𝙽𝙴𝙲𝚃𝙸𝙾𝙽,
-📖 𝚃𝙰𝙿𝙴 *.menu* 𝚂𝚄𝚁 𝚆𝙷𝙰𝚃𝚂𝙰𝙿𝙿
+/status
+→ Voir l'état de votre connexion
 
 ━━━━━━━━━━━━━━━━━━━━━━
-🐉 Powered By DEV SHADOW TECH`,
-      parse_mode: 'Markdown'
-    }
-  );
+✅ Une fois connecté, tapez *.menu* sur WhatsApp !
+  `, { parse_mode: 'Markdown' });
+}
+
+// ============================================
+// /start
+// ============================================
+bot.onText(/\/start/, async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+
+  // Si déjà confirmé, afficher le menu directement
+  if (confirmedUsers.has(userId)) {
+    return sendMainMenu(chatId);
+  }
+
+  // Sinon envoyer le Force Subscribe
+  await sendForceSubscribe(chatId);
+});
+
+// ============================================
+// CALLBACK - Bouton "J'ai rejoint"
+// ============================================
+bot.on('callback_query', async (query) => {
+  const chatId = query.message.chat.id;
+  const userId = query.from.id;
+  const data = query.data;
+
+  if (data === 'check_joined') {
+    // Répondre à l'action du bouton
+    await bot.answerCallbackQuery(query.id, {
+      text: '🔍 Vérification en cours...',
+      show_alert: false
+    });
+
+    // Pour les canaux privés on fait confiance à l'utilisateur
+    // Marquer comme confirmé
+    confirmedUsers.add(userId);
+
+    // Supprimer le message précédent
+    try {
+      await bot.deleteMessage(chatId, query.message.message_id);
+    } catch (e) {}
+
+    // Afficher le menu principal
+    await sendMainMenu(chatId);
+  }
 });
 
 // ============================================
@@ -65,15 +151,15 @@ bot.onText(/\/connecter (.+)/, async (msg, match) => {
   const phone = input.replace(/[^0-9]/g, '');
 
   if (!phone || phone.length < 10) {
-    return bot.sendMessage(chatId, '❌ 𝙽𝚄𝙼𝙴𝚁𝙾 𝙸𝙽𝚅𝙰𝙻𝙸𝙳𝙴 !\n\nExemple: /connecter +221XXXXXXXX');
+    return bot.sendMessage(chatId, '❌ Numéro invalide !\n\nExemple: /connecter +221XXXXXXXX');
   }
 
   // Vérifier si déjà connecté
   if (getSession(userId)) {
-    return bot.sendMessage(chatId, '⚠️ 𝚅𝙾𝚄𝚂 𝙴𝚃𝙴𝚂 𝙳𝙴𝙹𝙰 𝙲𝙾𝙽𝙽𝙴𝙲𝚃𝙴𝚁 !\n\n𝚃𝙰𝙿𝙴 /deconnecter 𝙳\'𝙰𝙱𝙾𝚁𝙳.');
+    return bot.sendMessage(chatId, '⚠️ Vous êtes déjà connecté !\n\nUtilisez /deconnecter d\'abord.');
   }
 
-  const loadingMsg = await bot.sendMessage(chatId, `⏳ 𝙶𝙴𝙽𝙴𝚁𝙰𝚃𝙸𝙾𝙽 𝙳𝚄 𝙲𝙾𝙳𝙴 𝙳𝙴 𝙲𝙾𝙽𝙽𝙴𝚇𝙸𝙾𝙽 𝙿𝙾𝚄𝚁 *+${phone}*...\n\n_𝚅𝙴𝙸𝙻𝙻𝙴𝚉 𝙿𝙰𝚃𝙸𝙴𝙽𝚃𝙴𝚉 𝙳𝙰𝙽𝚂 5 𝚂𝙴𝙲𝙾𝙽𝙳𝙴𝚂..._`, { parse_mode: 'Markdown' });
+  const loadingMsg = await bot.sendMessage(chatId, `⏳ Génération du code pairing pour *+${phone}*...\n\n_Veuillez patienter 5 secondes..._`, { parse_mode: 'Markdown' });
 
   try {
     await connectWhatsApp(
@@ -92,21 +178,21 @@ bot.onText(/\/connecter (.+)/, async (msg, match) => {
 
         await bot.editMessageText(
           `╔══════════════════════╗
-║   🔑 𝙲𝙾𝙳𝙴 𝙿𝙰𝙸𝚁𝙸𝙽𝙶 𝙳𝙴𝚅 𝚂𝙷𝙰𝙳𝙾𝚆    ║
+║   🔑 CODE PAIRING    ║
 ╚══════════════════════╝
 
 *Votre code:*
 \`${code}\`
 
-📱 *𝐂𝐨𝐦𝐦𝐞𝐧𝐭 𝐥'𝐮𝐭𝐢𝐥𝐢𝐬𝐞𝐫:*
-1️⃣ 𝙾𝚄𝚅𝚁𝙴𝚉 𝚆𝙷𝙰𝚃𝚂𝙰𝙿𝙿
-2️⃣ 𝙰𝙻𝙻𝙴𝚉 𝙳𝙰𝙽𝚂 ⚙️ *Paramètres*
-3️⃣ 𝙰𝙿𝙿𝚄𝚈𝙴𝚁 𝚂𝚄𝚁 *Appareils connectés*
-4️⃣ 𝙰𝙿𝙿𝚄𝚈𝙴𝚁 𝚂𝚄𝚁 *Connecter un appareil*
-5️⃣ 𝙲𝙷𝙾𝙸𝚂𝙸𝚂𝚂𝙴𝚉 *Connecter avec numéro*
-6️⃣ 𝙴𝙽𝚃𝚁𝙴𝚉 𝙻𝙴 𝙲𝙾𝙳𝙴 𝙲𝙸-𝙳𝙴𝚂𝚂𝙾𝚄𝚂
+📱 *Comment l'utiliser:*
+1️⃣ Ouvrez WhatsApp
+2️⃣ Allez dans ⚙️ *Paramètres*
+3️⃣ Appuyez sur *Appareils connectés*
+4️⃣ Appuyez sur *Connecter un appareil*
+5️⃣ Choisissez *Connecter avec numéro*
+6️⃣ Entrez le code ci-dessus
 
-⏰ *𝙻𝙴 𝙲𝙾𝙳𝙴 𝙴𝚇𝙿𝙸𝚁𝙴 𝙳𝙰𝙽𝚂 2 𝙼𝙸𝙽𝚄𝚃𝙴𝚂 !*`,
+⏰ *Le code expire dans 60 secondes !*`,
           { chat_id: chatId, message_id: loadingMsg.message_id, parse_mode: 'Markdown' }
         );
       },
@@ -114,13 +200,13 @@ bot.onText(/\/connecter (.+)/, async (msg, match) => {
       // Callback: connexion réussie
       async (sock) => {
         await bot.sendMessage(chatId, `
-✅ *𝙱𝙾𝚃 𝙳𝙴𝚅 𝚂𝙷𝙰𝙳𝙾𝚆 𝙲𝙾𝙽𝙽𝙴𝙲𝚃𝙴 𝙰𝚅𝙴𝙲 𝚂𝚄𝙲𝙲𝙴𝚂 !*
+✅ *WhatsApp connecté avec succès !*
 
 📱 Numéro: +${phone}
 🤖 Bot: ${BOT_NAME}
 
-𝙼𝙰𝙸𝙽𝚃𝙴𝙽𝙰𝙽𝚃 𝙰𝙻𝙻𝙴𝚉 𝚂𝚄𝚁 𝚆𝙷𝙰𝚃𝚂𝙰𝙿𝙿 𝙴𝚃 𝚃𝙰𝙿𝙴:
-*.menu* 𝙿𝙾𝚄𝚁 𝚅𝙾𝙸𝚁 𝙻𝙴𝚂 𝙲𝙾𝙼𝙼𝙰𝙽𝙳𝚂 !
+Maintenant allez sur WhatsApp et tapez:
+*.menu* pour voir toutes les commandes !
         `, { parse_mode: 'Markdown' });
       },
 
