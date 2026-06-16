@@ -23,17 +23,37 @@ const REQUIRED_CHANNELS = [
   {
     name: '📢 Canal Officiel',
     link: 'https://t.me/+dxH_OGPd269mMjM0',
-    id: null // Canal privé = pas de vérification automatique
+    id: -1004410224011
   },
   {
     name: '👥 Groupe Officiel',
     link: 'https://t.me/+Le-FgJipb-UyMDY0',
-    id: null // Groupe privé = pas de vérification automatique
+    id: -1004407166762
   }
 ];
 
 // Stocker les utilisateurs qui ont confirmé
 const confirmedUsers = new Set();
+
+// ============================================
+// VÉRIFICATION RÉELLE SI L'UTILISATEUR A REJOINT
+// ============================================
+async function checkUserJoined(userId) {
+  for (const channel of REQUIRED_CHANNELS) {
+    try {
+      const member = await bot.getChatMember(channel.id, userId);
+      const status = member.status;
+      // Si l'utilisateur n'est pas membre
+      if (status === 'left' || status === 'kicked' || status === 'banned') {
+        return false;
+      }
+    } catch (e) {
+      console.error(`Erreur vérification canal ${channel.name}:`, e.message);
+      return false;
+    }
+  }
+  return true; // A rejoint tous les canaux
+}
 
 // Envoyer le message Force Subscribe
 async function sendForceSubscribe(chatId) {
@@ -68,12 +88,11 @@ ${channelList}
 
 // Afficher le menu principal Telegram
 async function sendMainMenu(chatId) {
-  await bot.sendMessage(chatId, `
-bot.sendVideo(
+  await bot.sendVideo(
     chatId,
-    'https://files.catbox.moe/vw6pys.mp4', // Remplace par ton lien video
+    'https://files.catbox.moe/vw6pys.mp4',
     {
-      caption:
+      caption: `
 ╔━━━━━━━━━━━━━━━━━━━━━━╗
 ║  🤖 *𝑫𝑬𝑽 𝑺𝑯𝑨𝑫𝑶𝑾 𝑴𝑫 𝑩𝑶𝑻*  ║
 ╚━━━━━━━━━━━━━━━━━━━━━━╝
@@ -93,7 +112,10 @@ bot.sendVideo(
 
 ━━━━━━━━━━━━━━━━━━━━━━
 ✅ Une fois connecté, tapez *.menu* sur WhatsApp !
-  `, { parse_mode: 'Markdown' });
+      `,
+      parse_mode: 'Markdown'
+    }
+  );
 }
 
 // ============================================
@@ -121,13 +143,23 @@ bot.on('callback_query', async (query) => {
   const data = query.data;
 
   if (data === 'check_joined') {
-    // Répondre à l'action du bouton
     await bot.answerCallbackQuery(query.id, {
       text: '🔍 Vérification en cours...',
       show_alert: false
     });
 
-    // Pour les canaux privés on fait confiance à l'utilisateur
+    // Vérification réelle si l'utilisateur a rejoint les canaux
+    const joined = await checkUserJoined(userId);
+
+    if (!joined) {
+      // L'utilisateur n'a pas encore rejoint
+      await bot.answerCallbackQuery(query.id, {
+        text: '❌ Vous n\'avez pas encore rejoint tous les canaux !',
+        show_alert: true
+      });
+      return;
+    }
+
     // Marquer comme confirmé
     confirmedUsers.add(userId);
 
