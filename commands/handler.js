@@ -6,13 +6,43 @@ const PREFIX = process.env.PREFIX || '.';
 const BOT_NAME = process.env.BOT_NAME || 'MON-BOT';
 
 // ============================================
+// ANTILINK - SYSTÈME D'AVERTISSEMENTS
+// ============================================
+const antilinkSettings = {};
+const antilinkWarnings = {};
+
+function getAntilinkEnabled(groupId) {
+  return antilinkSettings[groupId]?.enabled || false;
+}
+
+function getWarningCount(groupId, userId) {
+  if (!antilinkWarnings[groupId]) antilinkWarnings[groupId] = {};
+  return antilinkWarnings[groupId][userId] || 0;
+}
+
+function addWarning(groupId, userId) {
+  if (!antilinkWarnings[groupId]) antilinkWarnings[groupId] = {};
+  antilinkWarnings[groupId][userId] = (antilinkWarnings[groupId][userId] || 0) + 1;
+  return antilinkWarnings[groupId][userId];
+}
+
+function resetWarning(groupId, userId) {
+  if (antilinkWarnings[groupId]) antilinkWarnings[groupId][userId] = 0;
+}
+
+// ============================================
+// ANTIPROMOTE SETTINGS
+// ============================================
+const antipromoteSettings = {};
+
+// ============================================
 // FONCTION PRINCIPALE - HANDLER MESSAGES WA
 // ============================================
 async function handleWAMessage(sock, msg, userId, tgBot) {
   try {
     const from = msg.key.remoteJid;
     if (!from) return;
-    
+
     const isGroup = from.endsWith('@g.us');
     const sender = isGroup ? msg.key.participant : from;
     const pushName = msg.pushName || 'User';
@@ -26,6 +56,51 @@ async function handleWAMessage(sock, msg, userId, tgBot) {
       msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId || '';
 
     if (!body) return;
+
+    // ============================================
+    // ANTILINK - VÉRIFICATION AUTOMATIQUE
+    // ============================================
+    if (isGroup && getAntilinkEnabled(from)) {
+      const hasLink = /(https?:\/\/|www\.|chat\.whatsapp\.com)/i.test(body);
+      const isOwner = sender === userId + '@s.whatsapp.net';
+
+      if (hasLink && !isOwner && !body.startsWith(PREFIX)) {
+        const senderNumber = sender.split('@')[0];
+        const count = addWarning(from, sender);
+
+        if (count < 3) {
+          await sock.sendMessage(from, {
+            text: `⚠️ @${senderNumber} *Avertissement ${count}/3 !*\n\nLes liens sont interdits dans ce groupe !\nEncore ${3 - count} avertissement(s) avant d'être expulsé.`,
+            mentions: [sender]
+          }, { quoted: msg });
+          try { await sock.sendMessage(from, { delete: msg.key }); } catch {}
+        } else {
+          await sock.sendMessage(from, {
+            text: `🚫 @${senderNumber} *Expulsé !*\n\nVous avez reçu 3 avertissements pour envoi de liens.\nAu revoir ! 👋`,
+            mentions: [sender]
+          }, { quoted: msg });
+          try { await sock.sendMessage(from, { delete: msg.key }); } catch {}
+          try { await sock.groupParticipantsUpdate(from, [sender], 'remove'); } catch {}
+          resetWarning(from, sender);
+        }
+        return;
+      }
+    }
+
+    // ============================================
+    // VV - VIEW ONCE
+    // ============================================
+    const viewOnceMsg = msg.message?.viewOnceMessage?.message ||
+      msg.message?.viewOnceMessageV2?.message ||
+      msg.message?.viewOnceMessageV2Extension?.message;
+
+    if (viewOnceMsg) {
+      try {
+        await sock.sendMessage(from, viewOnceMsg, { quoted: msg });
+      } catch {}
+      return;
+    }
+
     if (!body.startsWith(PREFIX)) return;
 
     const args = body.slice(PREFIX.length).trim().split(/ +/);
@@ -33,25 +108,77 @@ async function handleWAMessage(sock, msg, userId, tgBot) {
 
     console.log(`[WA] Commande: ${command} | De: ${sender} | Groupe: ${isGroup}`);
 
-    // Fonction pour répondre
     const reply = async (text) => {
       await sock.sendMessage(from, { text }, { quoted: msg });
     };
 
-    // ============================================
-    // 95 COMMANDES WHATSAPP
-    // ============================================
+    const isOwner = sender === userId + '@s.whatsapp.net';
 
     switch (command) {
 
       // ========== GÉNÉRAL ==========
       case 'menu':
-case 'help':
+      case 'help': {
+        // Message de chargement stylé
+        const loadingMsg = await sock.sendMessage(from, {
+          text: `╔━━━━━━━━━━━━━━━━━━━━━━╗
+║  🤖 𝙳𝙴𝚅 𝚂𝙷𝙰𝙳𝙾𝚆 𝙼𝙳  ║
+╚━━━━━━━━━━━━━━━━━━━━━━╝
 
-await sock.sendMessage(from, {
-image: { url: 'https://files.catbox.moe/b8gkna.jpg' },
-gifPlayback: false,
-caption: `
+⚡ 𝙿𝚁𝙾𝙲𝙴𝚂𝚂𝙸𝙽𝙶 𝙼𝙴𝙽𝚄...
+
+░░░░░░░░░░ 0%`
+        }, { quoted: msg });
+
+        const steps = [
+          { pct: 10,  bar: '█░░░░░░░░░' },
+          { pct: 20,  bar: '██░░░░░░░░' },
+          { pct: 30,  bar: '███░░░░░░░' },
+          { pct: 40,  bar: '████░░░░░░' },
+          { pct: 50,  bar: '█████░░░░░' },
+          { pct: 60,  bar: '██████░░░░' },
+          { pct: 70,  bar: '███████░░░' },
+          { pct: 80,  bar: '████████░░' },
+          { pct: 90,  bar: '█████████░' },
+          { pct: 100, bar: '██████████' },
+        ];
+
+        const labels = [
+          '𝙻𝙾𝙰𝙳𝙸𝙽𝙶 𝙲𝙾𝙼𝙼𝙰𝙽𝙳𝚂...',
+          '𝙲𝙷𝙴𝙲𝙺𝙸𝙽𝙶 𝚂𝚈𝚂𝚃𝙴𝙼...',
+          '𝙵𝙴𝚃𝙲𝙷𝙸𝙽𝙶 𝙳𝙰𝚃𝙰...',
+          '𝙸𝙽𝙸𝚃𝙸𝙰𝙻𝙸𝚉𝙸𝙽𝙶...',
+          '𝙿𝚁𝙾𝙲𝙴𝚂𝚂𝙸𝙽𝙶...',
+          '𝚅𝙴𝚁𝙸𝙵𝚈𝙸𝙽𝙶...',
+          '𝙲𝙾𝙽𝙽𝙴𝙲𝚃𝙸𝙽𝙶...',
+          '𝚂𝚈𝙽𝙲𝙸𝙽𝙶...',
+          '𝙵𝙸𝙽𝙰𝙻𝙸𝚉𝙸𝙽𝙶...',
+          '𝙳𝙾𝙽𝙴 ✅',
+        ];
+
+        for (let i = 0; i < steps.length; i++) {
+          await new Promise(r => setTimeout(r, 300));
+          try {
+            await sock.sendMessage(from, {
+              text: `╔━━━━━━━━━━━━━━━━━━━━━━╗
+║  🤖 𝙳𝙴𝚅 𝚂𝙷𝙰𝙳𝙾𝚆 𝙼𝙳  ║
+╚━━━━━━━━━━━━━━━━━━━━━━╝
+
+⚡ ${labels[i]}
+
+${steps[i].bar} ${steps[i].pct}%`,
+              edit: loadingMsg.key
+            });
+          } catch {}
+        }
+
+        await new Promise(r => setTimeout(r, 400));
+
+        // Menu principal
+        await sock.sendMessage(from, {
+          image: { url: 'https://files.catbox.moe/b8gkna.jpg' },
+          gifPlayback: false,
+          caption: `
 ╭━━━〔 🤖 ${BOT_NAME} 〕━━━⬣
 ┃ 👑 Owner : 𝙳𝙴𝚅 𝚂𝙷𝙰𝙳𝙾𝚆 𝚃𝙴𝙲𝙷
 ┃ ⚙️ Prefix : ${PREFIX}
@@ -71,20 +198,26 @@ caption: `
 ╭━━〔 👥 GROUP 〕━━⬣
 ┃ ${PREFIX}tagall
 ┃ ${PREFIX}kick
-┃ ${PREFIX}add
-┃ ${PREFIX}promote
-┃ ${PREFIX}demote
+┃ ${PREFIX}kickall
+┃ ${PREFIX}purge
+┃ ${PREFIX}add +numéro
+┃ ${PREFIX}promote @nom
+┃ ${PREFIX}demote @nom
 ┃ ${PREFIX}mute
 ┃ ${PREFIX}unmute
 ┃ ${PREFIX}link
 ┃ ${PREFIX}setname
 ┃ ${PREFIX}setdesc
+┃ ${PREFIX}antilink on/off
+┃ ${PREFIX}antipromote on/off
 ╰━━━━━━━━━━━━━━⬣
 
 ╭━━〔 🎨 MEDIA 〕━━⬣
 ┃ ${PREFIX}sticker
+┃ ${PREFIX}take
 ┃ ${PREFIX}toimg
 ┃ ${PREFIX}tomp3
+┃ ${PREFIX}vv
 ┃ ${PREFIX}ytmp3
 ┃ ${PREFIX}ytmp4
 ┃ ${PREFIX}play
@@ -107,7 +240,6 @@ caption: `
 ╰━━━━━━━━━━━━━━⬣
 
 ╭━━〔 🛠 TOOLS 〕━━⬣
-┃ ${PREFIX}take
 ┃ ${PREFIX}calcul
 ┃ ${PREFIX}base64
 ┃ ${PREFIX}decode64
@@ -139,9 +271,9 @@ caption: `
 ┃𝚌𝚛𝚎𝚎 𝚙𝚊𝚛 𝙳𝙴𝚅 𝚂𝙷𝙰𝙳𝙾𝚆
 ╰━━━━━━━━━━━━━━⬣
 `
-}, { quoted: msg });
-
-break;
+        }, { quoted: msg });
+        break;
+      }
 
       case 'ping':
         const start = Date.now();
@@ -175,6 +307,275 @@ break;
 
       case 'owner':
         await reply(`👑 *Owner du bot*\n\nContactez le propriétaire pour plus d'informations.`);
+        break;
+
+      // ========== GROUPE ==========
+      case 'tagall':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        try {
+          const groupMeta = await sock.groupMetadata(from);
+          const members = groupMeta.participants;
+          let text = '📢 *Mention de tous les membres:*\n\n';
+          const mentions = [];
+          for (const member of members) {
+            text += `@${member.id.split('@')[0]}\n`;
+            mentions.push(member.id);
+          }
+          await sock.sendMessage(from, { text, mentions }, { quoted: msg });
+        } catch {
+          await reply('❌ Impossible de mentionner tous les membres');
+        }
+        break;
+
+      case 'kickall':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        if (!isOwner) return reply('❌ Seul le owner peut utiliser kickall !');
+        try {
+          const groupMeta = await sock.groupMetadata(from);
+          const members = groupMeta.participants.filter(m => m.id !== sender && m.admin !== 'superadmin');
+          if (members.length === 0) return reply('❌ Aucun membre à expulser !');
+          await reply(`⏳ Expulsion de ${members.length} membres en cours...`);
+          for (const member of members) {
+            try {
+              await sock.groupParticipantsUpdate(from, [member.id], 'remove');
+              await new Promise(r => setTimeout(r, 500));
+            } catch {}
+          }
+          await reply(`✅ *${members.length} membres expulsés avec succès !*`);
+        } catch {
+          await reply('❌ Impossible d\'expulser les membres (vérifiez les permissions admin)');
+        }
+        break;
+
+      case 'purge':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        if (!isOwner) return reply('❌ Seul le owner peut utiliser purge !');
+        try {
+          const groupMeta = await sock.groupMetadata(from);
+          const members = groupMeta.participants.filter(m => m.id !== sender && m.admin !== 'superadmin');
+          if (members.length === 0) return reply('❌ Aucun membre à expulser !');
+          await reply(`💥 *PURGE EN COURS...*\n\n⏳ Expulsion de ${members.length} membres !`);
+          // Expulser tous en même temps (2 secondes)
+          const chunks = [];
+          for (let i = 0; i < members.length; i += 5) {
+            chunks.push(members.slice(i, i + 5));
+          }
+          for (const chunk of chunks) {
+            await Promise.all(chunk.map(m =>
+              sock.groupParticipantsUpdate(from, [m.id], 'remove').catch(() => {})
+            ));
+            await new Promise(r => setTimeout(r, 200));
+          }
+          await reply(`✅ *PURGE TERMINÉE !*\n\n🚀 ${members.length} membres expulsés !`);
+        } catch {
+          await reply('❌ Impossible d\'effectuer la purge (vérifiez les permissions admin)');
+        }
+        break;
+
+      case 'kick':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        const kickTarget = msg.message?.extendedTextMessage?.contextInfo?.participant ||
+          (msg.message?.extendedTextMessage?.text?.match(/@(\d+)/)?.[1] + '@s.whatsapp.net');
+        if (!kickTarget) return reply('❌ Mentionnez un utilisateur: .kick @user');
+        try {
+          await sock.groupParticipantsUpdate(from, [kickTarget], 'remove');
+          await reply(`✅ Membre expulsé avec succès !`);
+        } catch {
+          await reply('❌ Impossible d\'expulser (vérifiez les permissions admin)');
+        }
+        break;
+
+      case 'promote': {
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        // Récupérer la cible via mention ou reply
+        const mentionedPromote = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] ||
+          msg.message?.extendedTextMessage?.contextInfo?.participant;
+        if (!mentionedPromote) return reply(`❌ Usage: ${PREFIX}promote @nom`);
+        try {
+          await sock.groupParticipantsUpdate(from, [mentionedPromote], 'promote');
+          await sock.sendMessage(from, {
+            text: `👑 @${mentionedPromote.split('@')[0]} *a été nommé administrateur !*`,
+            mentions: [mentionedPromote]
+          }, { quoted: msg });
+        } catch {
+          await reply('❌ Impossible de promouvoir (vérifiez les permissions)');
+        }
+        break;
+      }
+
+      case 'demote': {
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        const mentionedDemote = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0] ||
+          msg.message?.extendedTextMessage?.contextInfo?.participant;
+        if (!mentionedDemote) return reply(`❌ Usage: ${PREFIX}demote @nom`);
+        try {
+          await sock.groupParticipantsUpdate(from, [mentionedDemote], 'demote');
+          await sock.sendMessage(from, {
+            text: `⬇️ @${mentionedDemote.split('@')[0]} *a été dénommé !*`,
+            mentions: [mentionedDemote]
+          }, { quoted: msg });
+        } catch {
+          await reply('❌ Impossible de rétrograder (vérifiez les permissions)');
+        }
+        break;
+      }
+
+      case 'add': {
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        const addArg = args[0];
+        if (!addArg) return reply(`❌ Usage: ${PREFIX}add +221XXXXXXXX`);
+        const addNumber = addArg.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+        try {
+          await sock.groupParticipantsUpdate(from, [addNumber], 'add');
+          await reply(`✅ *+${addArg.replace(/[^0-9]/g, '')} ajouté avec succès !*`);
+        } catch {
+          await reply('❌ Impossible d\'ajouter ce membre');
+        }
+        break;
+      }
+
+      case 'mute':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        try {
+          await sock.groupSettingUpdate(from, 'announcement');
+          await reply('🔇 Groupe mis en mode silencieux (seuls les admins peuvent écrire)');
+        } catch {
+          await reply('❌ Impossible de muter le groupe');
+        }
+        break;
+
+      case 'unmute':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        try {
+          await sock.groupSettingUpdate(from, 'not_announcement');
+          await reply('🔊 Groupe réactivé (tout le monde peut écrire)');
+        } catch {
+          await reply('❌ Impossible de réactiver le groupe');
+        }
+        break;
+
+      case 'link':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        try {
+          const link = await sock.groupInviteCode(from);
+          await reply(`🔗 *Lien du groupe:*\nhttps://chat.whatsapp.com/${link}`);
+        } catch {
+          await reply('❌ Impossible d\'obtenir le lien (vérifiez les permissions)');
+        }
+        break;
+
+      case 'setname':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        const newName = args.join(' ');
+        if (!newName) return reply('❌ Usage: .setname Nouveau nom');
+        try {
+          await sock.groupUpdateSubject(from, newName);
+          await reply(`✅ Nom du groupe changé en: ${newName}`);
+        } catch {
+          await reply('❌ Impossible de changer le nom');
+        }
+        break;
+
+      case 'setdesc':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        const newDesc = args.join(' ');
+        if (!newDesc) return reply('❌ Usage: .setdesc Nouvelle description');
+        try {
+          await sock.groupUpdateDescription(from, newDesc);
+          await reply(`✅ Description mise à jour !`);
+        } catch {
+          await reply('❌ Impossible de changer la description');
+        }
+        break;
+
+      case 'groupinfo':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        try {
+          const meta = await sock.groupMetadata(from);
+          await reply(`
+📊 *Info du Groupe*
+
+📌 Nom: ${meta.subject}
+👥 Membres: ${meta.participants.length}
+📝 Description: ${meta.desc || 'Aucune description'}
+👑 Créé par: @${meta.owner?.split('@')[0]}
+📅 Créé le: ${moment(meta.creation * 1000).format('DD/MM/YYYY')}
+          `);
+        } catch {
+          await reply('❌ Impossible d\'obtenir les infos du groupe');
+        }
+        break;
+
+      case 'antilink':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        const antilinkArg = args[0]?.toLowerCase();
+        if (!antilinkArg || !['on', 'off'].includes(antilinkArg)) {
+          return reply(`❌ Usage: ${PREFIX}antilink on ou ${PREFIX}antilink off`);
+        }
+        if (!antilinkSettings[from]) antilinkSettings[from] = {};
+        antilinkSettings[from].enabled = antilinkArg === 'on';
+        await reply(`🔗 *Antilink ${antilinkArg === 'on' ? '✅ Activé' : '❌ Désactivé'} !*\n\n${antilinkArg === 'on' ? '⚠️ Tout membre qui envoie un lien recevra 3 avertissements avant d\'être expulsé.' : 'Les liens sont maintenant autorisés.'}`);
+        break;
+
+      case 'antipromote':
+        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
+        const antipromoteArg = args[0]?.toLowerCase();
+        if (!antipromoteArg || !['on', 'off'].includes(antipromoteArg)) {
+          return reply(`❌ Usage: ${PREFIX}antipromote on ou ${PREFIX}antipromote off`);
+        }
+        antipromoteSettings[from] = antipromoteArg === 'on';
+        await reply(`👑 *Antipromote ${antipromoteArg === 'on' ? '✅ Activé' : '❌ Désactivé'} !*\n\n${antipromoteArg === 'on' ? 'Le bot annoncera les promotions et démotions dans le groupe.' : ''}`);
+        break;
+
+      // ========== MEDIA ==========
+      case 'sticker':
+        await reply('📌 Envoyez une image avec la légende .sticker pour créer un sticker');
+        break;
+
+      case 'take': {
+        const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+        if (!quotedMsg?.stickerMessage) return reply(`❌ Répondez à un sticker avec ${PREFIX}take nom | auteur`);
+        const parts = args.join(' ').split('|');
+        const stickerName = parts[0]?.trim() || BOT_NAME;
+        const stickerAuthor = parts[1]?.trim() || 'DEV SHADOW';
+        try {
+          await sock.sendMessage(from, {
+            sticker: { url: await sock.downloadMediaMessage(
+              { message: quotedMsg, key: msg.message.extendedTextMessage.contextInfo.stanzaId }
+            )},
+            mimetype: 'image/webp',
+            stickerName,
+            stickerAuthor
+          }, { quoted: msg });
+          await reply(`✅ *Sticker renommé !*\n📝 Nom: ${stickerName}\n✍️ Auteur: ${stickerAuthor}`);
+        } catch {
+          await reply('❌ Impossible de modifier le sticker');
+        }
+        break;
+      }
+
+      case 'toimg':
+        await reply('📌 Envoyez un sticker avec la légende .toimg pour le convertir en image');
+        break;
+
+      case 'vv':
+        await reply('👁️ Renvoi automatique des messages view once activé !');
+        break;
+
+      case 'tomp3':
+        await reply('🎵 Envoyez une vidéo avec la légende .tomp3 pour la convertir en audio');
+        break;
+
+      case 'ytmp3':
+        await reply('🎵 Fonctionnalité YouTube MP3 disponible avec un service de téléchargement');
+        break;
+
+      case 'ytmp4':
+        await reply('🎬 Fonctionnalité YouTube MP4 disponible avec un service de téléchargement');
+        break;
+
+      case 'play':
+        await reply('🎵 Fonctionnalité lecture musique disponible avec un service audio');
         break;
 
       // ========== OUTILS ==========
@@ -366,227 +767,6 @@ break;
         await reply(`💝 *Compliment:*\n\n${compliments[Math.floor(Math.random() * compliments.length)]}`);
         break;
 
-      // ========== CRYPTO ==========
-      case 'btc':
-      case 'bitcoin':
-        try {
-          const res = await axios.get('https://api.coinbase.com/v2/prices/BTC-USD/spot');
-          const price = parseFloat(res.data.data.amount).toLocaleString();
-          await reply(`₿ *Bitcoin (BTC)*\n\n💵 Prix: $${price} USD`);
-        } catch {
-          await reply('❌ Impossible d\'obtenir le prix du Bitcoin');
-        }
-        break;
-
-      case 'eth':
-      case 'ethereum':
-        try {
-          const res = await axios.get('https://api.coinbase.com/v2/prices/ETH-USD/spot');
-          const price = parseFloat(res.data.data.amount).toLocaleString();
-          await reply(`Ξ *Ethereum (ETH)*\n\n💵 Prix: $${price} USD`);
-        } catch {
-          await reply('❌ Impossible d\'obtenir le prix d\'Ethereum');
-        }
-        break;
-
-      case 'crypto': {
-        const coin = args[0]?.toUpperCase();
-        if (!coin) { await reply('❌ Usage: .crypto BTC'); break; }
-        try {
-          const resCrypto = await axios.get(`https://api.coinbase.com/v2/prices/${coin}-USD/spot`);
-          const priceCrypto = parseFloat(resCrypto.data.data.amount).toLocaleString();
-          await reply(`💰 *${coin}*\n\n💵 Prix: $${priceCrypto} USD`);
-        } catch {
-          await reply(`❌ Crypto "${coin}" introuvable`);
-        }
-        break;
-      }
-
-      // ========== IA ==========
-      case 'ai':
-      case 'gpt':
-        const aiPrompt = args.join(' ');
-        if (!aiPrompt) return reply('❌ Usage: .ai votre question');
-        await reply('🤖 En train de réfléchir...');
-        try {
-          const res = await axios.get(`https://api.nyxs.pw/ai/gpt4?text=${encodeURIComponent(aiPrompt)}`);
-          await reply(`🤖 *Réponse IA:*\n\n${res.data.result || res.data.message || 'Pas de réponse'}`);
-        } catch {
-          await reply('❌ Service IA temporairement indisponible');
-        }
-        break;
-
-      case 'traduction':
-      case 'translate':
-        const textToTranslate = args.join(' ');
-        if (!textToTranslate) return reply('❌ Usage: .traduction texte');
-        try {
-          const res = await axios.get(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|fr`);
-          await reply(`🌐 *Traduction:*\n\n${res.data.responseData.translatedText}`);
-        } catch {
-          await reply('❌ Traduction impossible');
-        }
-        break;
-
-      case 'météo':
-      case 'weather':
-        const city = args.join(' ');
-        if (!city) return reply('❌ Usage: .météo Paris');
-        try {
-          const res = await axios.get(`https://wttr.in/${encodeURIComponent(city)}?format=%C+%t+%h+%w`);
-          await reply(`🌤️ *Météo à ${city}:*\n\n${res.data}`);
-        } catch {
-          await reply('❌ Météo introuvable pour cette ville');
-        }
-        break;
-
-      case 'wiki':
-        const wikiQuery = args.join(' ');
-        if (!wikiQuery) return reply('❌ Usage: .wiki sujet');
-        try {
-          const res = await axios.get(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiQuery)}`);
-          await reply(`📚 *Wikipedia: ${res.data.title}*\n\n${res.data.extract?.slice(0, 500)}...\n\n🔗 ${res.data.content_urls?.desktop?.page}`);
-        } catch {
-          await reply('❌ Article Wikipedia introuvable');
-        }
-        break;
-
-      // ========== GROUPE ==========
-      case 'tagall':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        try {
-          const groupMeta = await sock.groupMetadata(from);
-          const members = groupMeta.participants;
-          let text = '📢 *Mention de tous les membres:*\n\n';
-          const mentions = [];
-          for (const member of members) {
-            text += `@${member.id.split('@')[0]}\n`;
-            mentions.push(member.id);
-          }
-          await sock.sendMessage(from, { text, mentions }, { quoted: msg });
-        } catch {
-          await reply('❌ Impossible de mentionner tous les membres');
-        }
-        break;
-
-      case 'groupinfo':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        try {
-          const meta = await sock.groupMetadata(from);
-          await reply(`
-📊 *Info du Groupe*
-
-📌 Nom: ${meta.subject}
-👥 Membres: ${meta.participants.length}
-📝 Description: ${meta.desc || 'Aucune description'}
-👑 Créé par: @${meta.owner?.split('@')[0]}
-📅 Créé le: ${moment(meta.creation * 1000).format('DD/MM/YYYY')}
-          `);
-        } catch {
-          await reply('❌ Impossible d\'obtenir les infos du groupe');
-        }
-        break;
-
-      case 'link':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        try {
-          const link = await sock.groupInviteCode(from);
-          await reply(`🔗 *Lien du groupe:*\nhttps://chat.whatsapp.com/${link}`);
-        } catch {
-          await reply('❌ Impossible d\'obtenir le lien (vérifiez les permissions)');
-        }
-        break;
-
-      case 'kick':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        const kickTarget = msg.message?.extendedTextMessage?.contextInfo?.participant ||
-          (msg.message?.extendedTextMessage?.text?.match(/@(\d+)/)?.[1] + '@s.whatsapp.net');
-        if (!kickTarget) return reply('❌ Mentionnez un utilisateur: .kick @user');
-        try {
-          await sock.groupParticipantsUpdate(from, [kickTarget], 'remove');
-          await reply(`✅ Membre expulsé avec succès !`);
-        } catch {
-          await reply('❌ Impossible d\'expulser (vérifiez les permissions admin)');
-        }
-        break;
-
-      case 'promote':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        const promoteTarget = msg.message?.extendedTextMessage?.contextInfo?.participant;
-        if (!promoteTarget) return reply('❌ Mentionnez un utilisateur: .promote @user');
-        try {
-          await sock.groupParticipantsUpdate(from, [promoteTarget], 'promote');
-          await reply(`✅ Membre promu administrateur !`);
-        } catch {
-          await reply('❌ Impossible de promouvoir (vérifiez les permissions)');
-        }
-        break;
-
-      case 'demote':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        const demoteTarget = msg.message?.extendedTextMessage?.contextInfo?.participant;
-        if (!demoteTarget) return reply('❌ Mentionnez un utilisateur: .demote @user');
-        try {
-          await sock.groupParticipantsUpdate(from, [demoteTarget], 'demote');
-          await reply(`✅ Membre rétrogradé !`);
-        } catch {
-          await reply('❌ Impossible de rétrograder (vérifiez les permissions)');
-        }
-        break;
-
-      case 'mute':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        try {
-          await sock.groupSettingUpdate(from, 'announcement');
-          await reply('🔇 Groupe mis en mode silencieux (seuls les admins peuvent écrire)');
-        } catch {
-          await reply('❌ Impossible de muter le groupe');
-        }
-        break;
-
-      case 'unmute':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        try {
-          await sock.groupSettingUpdate(from, 'not_announcement');
-          await reply('🔊 Groupe réactivé (tout le monde peut écrire)');
-        } catch {
-          await reply('❌ Impossible de réactiver le groupe');
-        }
-        break;
-
-      case 'setname':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        const newName = args.join(' ');
-        if (!newName) return reply('❌ Usage: .setname Nouveau nom');
-        try {
-          await sock.groupUpdateSubject(from, newName);
-          await reply(`✅ Nom du groupe changé en: ${newName}`);
-        } catch {
-          await reply('❌ Impossible de changer le nom');
-        }
-        break;
-
-      case 'setdesc':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        const newDesc = args.join(' ');
-        if (!newDesc) return reply('❌ Usage: .setdesc Nouvelle description');
-        try {
-          await sock.groupUpdateDescription(from, newDesc);
-          await reply(`✅ Description mise à jour !`);
-        } catch {
-          await reply('❌ Impossible de changer la description');
-        }
-        break;
-
-      // ========== COMMANDES RESTANTES ==========
-      case 'sticker':
-        await reply('📌 Envoyez une image avec la légende .sticker pour créer un sticker');
-        break;
-
-      case 'toimg':
-        await reply('📌 Envoyez un sticker avec la légende .toimg pour le convertir en image');
-        break;
-
       case 'meme':
         try {
           const res = await axios.get('https://meme-api.com/gimme');
@@ -638,10 +818,6 @@ break;
       case 'restart':
         await reply('🔄 Redémarrage du bot...');
         setTimeout(() => process.exit(0), 1000);
-        break;
-
-      case 'antilink':
-        await reply(`✅ Anti-lien ${args[0] === 'on' ? 'activé' : 'désactivé'}`);
         break;
 
       case 'welcome':
@@ -701,20 +877,57 @@ break;
         await reply('📰 Fonctionnalité actualités disponible avec une clé API NewsAPI');
         break;
 
-      case 'ytmp3':
-        await reply('🎵 Fonctionnalité YouTube MP3 disponible avec un service de téléchargement');
-        break;
-
-      case 'ytmp4':
-        await reply('🎬 Fonctionnalité YouTube MP4 disponible avec un service de téléchargement');
-        break;
-
-      case 'play':
-        await reply('🎵 Fonctionnalité lecture musique disponible avec un service audio');
-        break;
-
       case 'imagine':
         await reply('🎨 Fonctionnalité génération image IA disponible avec une clé API');
+        break;
+
+      // ========== IA ==========
+      case 'ai':
+      case 'gpt':
+        const aiPrompt = args.join(' ');
+        if (!aiPrompt) return reply('❌ Usage: .ai votre question');
+        await reply('🤖 En train de réfléchir...');
+        try {
+          const res = await axios.get(`https://api.nyxs.pw/ai/gpt4?text=${encodeURIComponent(aiPrompt)}`);
+          await reply(`🤖 *Réponse IA:*\n\n${res.data.result || res.data.message || 'Pas de réponse'}`);
+        } catch {
+          await reply('❌ Service IA temporairement indisponible');
+        }
+        break;
+
+      case 'traduction':
+      case 'translate':
+        const textToTranslate = args.join(' ');
+        if (!textToTranslate) return reply('❌ Usage: .traduction texte');
+        try {
+          const res = await axios.get(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|fr`);
+          await reply(`🌐 *Traduction:*\n\n${res.data.responseData.translatedText}`);
+        } catch {
+          await reply('❌ Traduction impossible');
+        }
+        break;
+
+      case 'météo':
+      case 'weather':
+        const city = args.join(' ');
+        if (!city) return reply('❌ Usage: .météo Paris');
+        try {
+          const res = await axios.get(`https://wttr.in/${encodeURIComponent(city)}?format=%C+%t+%h+%w`);
+          await reply(`🌤️ *Météo à ${city}:*\n\n${res.data}`);
+        } catch {
+          await reply('❌ Météo introuvable pour cette ville');
+        }
+        break;
+
+      case 'wiki':
+        const wikiQuery = args.join(' ');
+        if (!wikiQuery) return reply('❌ Usage: .wiki sujet');
+        try {
+          const res = await axios.get(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiQuery)}`);
+          await reply(`📚 *Wikipedia: ${res.data.title}*\n\n${res.data.extract?.slice(0, 500)}...\n\n🔗 ${res.data.content_urls?.desktop?.page}`);
+        } catch {
+          await reply('❌ Article Wikipedia introuvable');
+        }
         break;
 
       case 'resume':
@@ -764,18 +977,6 @@ break;
         await reply('✅ Fonctionnalité de déblocage en cours de développement');
         break;
 
-      case 'add':
-        if (!isGroup) return reply('❌ Commande disponible uniquement en groupe');
-        const addNumber = args[0]?.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
-        if (!args[0]) return reply('❌ Usage: .add 221XXXXXXXX');
-        try {
-          await sock.groupParticipantsUpdate(from, [addNumber], 'add');
-          await reply(`✅ Membre ajouté avec succès !`);
-        } catch {
-          await reply('❌ Impossible d\'ajouter ce membre');
-        }
-        break;
-
       case 'ban':
         await reply('🚫 Fonctionnalité ban en cours de développement');
         break;
@@ -796,9 +997,41 @@ break;
         await reply('🗑️ Fonctionnalité clearall réservée au owner');
         break;
 
-      case 'tomp3':
-        await reply('🎵 Envoyez une vidéo avec la légende .tomp3 pour la convertir en audio');
+      // ========== CRYPTO ==========
+      case 'btc':
+      case 'bitcoin':
+        try {
+          const res = await axios.get('https://api.coinbase.com/v2/prices/BTC-USD/spot');
+          const price = parseFloat(res.data.data.amount).toLocaleString();
+          await reply(`₿ *Bitcoin (BTC)*\n\n💵 Prix: $${price} USD`);
+        } catch {
+          await reply('❌ Impossible d\'obtenir le prix du Bitcoin');
+        }
         break;
+
+      case 'eth':
+      case 'ethereum':
+        try {
+          const res = await axios.get('https://api.coinbase.com/v2/prices/ETH-USD/spot');
+          const price = parseFloat(res.data.data.amount).toLocaleString();
+          await reply(`Ξ *Ethereum (ETH)*\n\n💵 Prix: $${price} USD`);
+        } catch {
+          await reply('❌ Impossible d\'obtenir le prix d\'Ethereum');
+        }
+        break;
+
+      case 'crypto': {
+        const coin = args[0]?.toUpperCase();
+        if (!coin) { await reply('❌ Usage: .crypto BTC'); break; }
+        try {
+          const resCrypto = await axios.get(`https://api.coinbase.com/v2/prices/${coin}-USD/spot`);
+          const priceCrypto = parseFloat(resCrypto.data.data.amount).toLocaleString();
+          await reply(`💰 *${coin}*\n\n💵 Prix: $${priceCrypto} USD`);
+        } catch {
+          await reply(`❌ Crypto "${coin}" introuvable`);
+        }
+        break;
+      }
 
       default:
         await reply(`❌ Commande *${PREFIX}${command}* inconnue.\n\nTapez *${PREFIX}menu* pour voir toutes les commandes.`);
@@ -810,6 +1043,33 @@ break;
   }
 }
 
+// ============================================
+// ANTIPROMOTE - DÉTECTION AUTOMATIQUE
+// ============================================
+async function handleGroupParticipantsUpdate(sock, update) {
+  try {
+    const { id, participants, action, author } = update;
+    if (!antipromoteSettings[id]) return;
+    if (action !== 'promote' && action !== 'demote') return;
+
+    const adminNumber = author ? `@${author.split('@')[0]}` : 'un administrateur';
+
+    for (const participant of participants) {
+      const number = participant.split('@')[0];
+      const text = action === 'promote'
+        ? `👑 @${number} *a été nommé administrateur* par ${adminNumber} !`
+        : `⬇️ @${number} *a été dénommé* par ${adminNumber} !`;
+
+      await sock.sendMessage(id, {
+        text,
+        mentions: author ? [participant, author] : [participant]
+      });
+    }
+  } catch (err) {
+    console.error('[ANTIPROMOTE ERROR]', err);
+  }
+}
+
 function formatUptime(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -817,4 +1077,4 @@ function formatUptime(seconds) {
   return `${h}h ${m}m ${s}s`;
 }
 
-module.exports = { handleWAMessage };
+module.exports = { handleWAMessage, handleGroupParticipantsUpdate };
